@@ -3,14 +3,19 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import passport from 'passport';
 import initializePassport from './config/passport.config.js';
+
 import authRoutes from './routers/auth.router.js';
 import sessionsRoutes from './routers/sessions.router.js';
-import usersRoutes from './routers/users.router.js'; // Importamos rutas de usuarios
+import usersRoutes from './routers/users.router.js';
+import productsRouter from './routers/products.router.js';
+import ticketsRouter from './routers/tickets.router.js'; 
+import cartsRouter from './routers/cart.router.js';
 
 dotenv.config();
 
 const app = express();
 
+// Middlewares para parsear JSON y URL-encoded
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -26,13 +31,17 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('✅ Conectado a MongoDB'))
 .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
 
-// Ruta raíz simple para probar que el servidor corre
+// Ruta raíz simple
 app.get('/', (req, res) => {
     res.send('Bienvenido a la API de ecommerce');
 });
 
-// Usamos las rutas
+// Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionsRoutes);
-app.use('/api/users', usersRoutes);  
+app.use('/api/users', usersRoutes);
+app.use('/api/products', productsRouter);
+app.use('/api/t', ticketsRouter); 
+app.use('/api/carts', cartsRouter);
+
 export default app;
