@@ -10,6 +10,7 @@ import usersRoutes from './routers/users.router.js';
 import productsRouter from './routers/products.router.js';
 import ticketsRouter from './routers/tickets.router.js'; 
 import cartsRouter from './routers/cart.router.js';
+import passwordRouter from './routers/password.router.js'; 
 
 dotenv.config();
 
@@ -41,7 +42,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/products', productsRouter);
-app.use('/api/t', ticketsRouter); 
+app.use('/api/tickets', ticketsRouter);
 app.use('/api/carts', cartsRouter);
+app.use('/api/password', passwordRouter); 
 
 export default app;
