@@ -1,74 +1,30 @@
-import { Router } from 'express';
-import ProductRepository from '../repositories/ProductRepository.js';
-import passport from 'passport';
-import { authorizeRoles } from '../middlewares/authorization.js';
+// Router: define rutas y llama al controller
+import { Router } from "express";
+import passport from "passport";
+import { authorizeRoles } from "../middlewares/authorization.js";
+import {
+    getAllProducts,
+    getProductById,
+    createProduct,
+    updateProduct,
+    deleteProduct
+} from "../controllers/ProductController.js";
 
 const router = Router();
-const repo = new ProductRepository();
 
-// Obtener todos los productos (público)
-router.get('/', async (req, res) => {
-    try {
-        const products = await repo.getProducts();
-        res.json(products);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
+//obtener todos los productos (público)
+router.get("/", getAllProducts);
 
-// Crear producto (solo admin)
-router.post(
-    '/',
-    passport.authenticate('jwt', { session: false }),
-    authorizeRoles('admin'),
-    async (req, res) => {
-        try {
-            const product = await repo.addProduct(req.body);
-            res.status(201).json(product);
-        } catch (error) {
-            res.status(400).json({ message: error.message });
-        }
-    }
-);
+//crear producto (solo admin)
+router.post("/", passport.authenticate("jwt", { session: false }), authorizeRoles("admin"), createProduct);
 
-// Obtener producto por id (público)
-router.get('/:id', async (req, res) => {
-    try {
-        const product = await repo.getProductById(req.params.id);
-        res.json(product);
-    } catch (error) {
-        res.status(404).json({ message: error.message });
-    }
-});
+//obtener producto por id (publico)
+router.get("/:id", getProductById);
 
-// Actualizar producto (solo admin)
-router.put(
-    '/:id',
-    passport.authenticate('jwt', { session: false }),
-    authorizeRoles('admin'),
-    async (req, res) => {
-        try {
-            const updated = await repo.updateProduct(req.params.id, req.body);
-            res.json(updated);
-        } catch (error) {
-            res.status(404).json({ message: error.message });
-        }
-    }
-);
+//actualizar producto (solo admin)
+router.put("/:id", passport.authenticate("jwt", { session: false }), authorizeRoles("admin"), updateProduct);
 
-// Eliminar producto (solo admin)
-router.delete(
-    '/:id',
-    passport.authenticate('jwt', { session: false }),
-    authorizeRoles('admin'),
-    async (req, res) => {
-        try {
-            await repo.deleteProduct(req.params.id);
-            res.json({ message: 'Producto eliminado' });
-        } catch (error) {
-            res.status(404).json({ message: error.message });
-        }
-    }
-);
+//eliminar producto (solo admin)
+router.delete("/:id", passport.authenticate("jwt", { session: false }), authorizeRoles("admin"), deleteProduct);
 
 export default router;

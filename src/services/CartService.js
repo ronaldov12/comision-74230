@@ -1,49 +1,54 @@
-//! lógica de negocio
-import Product from "../models/Product.js";
-import CartRepository from "../repositories/CartRepository.js";
+//logica de negocio y validaciones
+import CartDAO from "../dao/cart.dao.js";
+import ProductService from "./ProductService.js"; 
 
 export default class CartService {
     constructor() {
-        this.cartRepo = new CartRepository();
+        this.cartDAO = new CartDAO();
+        this.productService = new ProductService();
     }
 
-    // verificar stock antes de la compra
+    async getOrCreateCartByUser(userId) {
+        return this.cartDAO.getOrCreateCartByUser(userId);
+    }
+
+    async addProductToCart(userId, productId, quantity) {
+        return this.cartDAO.addProductToCart(userId, productId, quantity);
+    }
+
+    async removeProductFromCart(userId, productId) {
+        return this.cartDAO.removeProductFromCart(userId, productId);
+    }
+
+    async clearCart(userId) {
+        return this.cartDAO.clearCart(userId);
+    }
+
+    // verificar stock antes de comprar
     async verifyStock(userId) {
-        const cart = await this.cartRepo.getCartByUser(userId);
+        const cart = await this.cartDAO.getOrCreateCartByUser(userId);
         const productsInStock = [];
         const productsOutOfStock = [];
 
         for (const item of cart.products) {
-            const product = item.product;
+            const product = await this.productService.getProductById(item.product._id);
             if (product.stock >= item.quantity) {
                 productsInStock.push(item);
             } else {
-                productsOutOfStock.push({
-                    productId: product._id,
-                    requested: item.quantity,
-                    available: product.stock
-                });
+                productsOutOfStock.push(item);
             }
         }
 
         return {
-            cartId: cart._id,
             productsInStock,
-            productsOutOfStock
+            productsOutOfStock,
+            cartId: cart._id
         };
     }
 
-    // reducir stock después de compra exitosa
     async reduceStock(products) {
         for (const item of products) {
-            await Product.findByIdAndUpdate(item.product._id, {
-                $inc: { stock: -item.quantity }
-            });
+            await this.productService.reduceStock(item.product._id, item.quantity);
         }
-    }
-
-    // vaciar carrito
-    async clearCart(userId) {
-        return await this.cartRepo.clearCart(userId);
     }
 }

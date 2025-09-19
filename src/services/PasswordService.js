@@ -1,66 +1,48 @@
-import nodemailer from 'nodemailer';
-import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import PasswordDAO from "../dao/Password.dao.js";
+import transporter from "../config/mailer.js";
 
 export default class PasswordService {
     constructor() {
-        // Configuración del transporter de nodemailer usando variables de entorno
-        this.transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-        });
+        this.passwordDAO = new PasswordDAO();
     }
 
-    // genera un token seguro de recuperacion y lo guarda temporalmente en el usuario
-    async generateResetToken(userEmail) {
-        const user = await User.findOne({ email: userEmail });
-        if (!user) throw new Error('Usuario no encontrado');
+    // genera token y envía email de recuperación
+    async generateResetToken(email) {
+        const user = await this.passwordDAO.findUserByEmail(email);
+        if (!user) throw new Error("Usuario no encontrado");
 
-        // crear token aleatorio
-        const token = crypto.randomBytes(32).toString('hex');
+        const token = jwt.sign({ id: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
+        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
-        // guardar token y fecha de expiración en el usuario
-        user.resetToken = token;
-        user.resetTokenExpiration = Date.now() + 3600000; 
-        await user.save();
-
-        // enviar email con link de recuperacion
-        const resetUrl = `http://localhost:8080/api/password/reset/${token}`;
-        await this.transporter.sendMail({
-            from: `"Ecommerce" <${process.env.EMAIL_USER}>`,
+        const mailOptions = {
+            from: `"Ecommerce Soporte" <${process.env.EMAIL_USER}>`,
             to: user.email,
-            subject: 'Recuperación de contraseña',
-            html: `<p>Haz click <a href="${resetUrl}">aquí</a> para restablecer tu contraseña. El enlace expira en 1 hora.</p>`
-        });
+            subject: "Recuperación de contraseña",
+            html: `<p>Hola ${user.first_name},</p>
+                <p>Haz clic en el siguiente enlace para restablecer tu contraseña. Este enlace expira en 1 hora:</p>
+                <a href="${resetLink}" target="_blank">Restablecer contraseña</a>`
+        };
 
-        return { message: 'Correo de recuperación enviado' };
+        await transporter.sendMail(mailOptions);
+        return { message: "Correo de recuperación enviado correctamente" };
     }
 
-    // Verificar token y permitir cambio de contraseña
+    // restablece la contraseña usando token
     async resetPassword(token, newPassword) {
-        const user = await User.findOne({
-            resetToken: token,
-            resetTokenExpiration: { $gt: Date.now() }
-        });
+        if (!token) throw new Error("Token requerido");
+        if (!newPassword) throw new Error("Nueva contraseña requerida");
 
-        if (!user) throw new Error('Token inválido o expirado');
+        let payload;
+        try {
+            payload = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            throw new Error("Token inválido o expirado");
+        }
 
-        // Evitar que sea la misma contraseña anterior
-        const match = await bcrypt.compare(newPassword, user.password);
-        if (match) throw new Error('No puedes usar la misma contraseña anterior');
-
-        // Hashear nueva contraseña
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        user.password = hashedPassword;
-
-        // limpiar token y expiración
-        user.resetToken = undefined;
-        user.resetTokenExpiration = undefined;
-        await user.save();
-
-        return { message: 'Contraseña restablecida correctamente' };
+        await this.passwordDAO.updatePassword(payload.id, hashedPassword);
+        return { message: "Contraseña restablecida con éxito" };
     }
 }

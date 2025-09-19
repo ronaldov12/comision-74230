@@ -1,45 +1,61 @@
-// src/services/TicketService.js
-import Ticket from '../models/Ticket.js';
-import CartService from './CartService.js';
-import Product from '../models/Product.js';
+import TicketDAO from '../dao/ticket.dao.js';
+import CartDAO from '../dao/cart.dao.js';
+import ProductDAO from '../dao/product.dao.js';
 
 export default class TicketService {
     constructor() {
-        this.cartService = new CartService();
+        this.ticketDAO = new TicketDAO();
+        this.cartDAO = new CartDAO();
+        this.productDAO = new ProductDAO();
     }
 
-    // Generar ticket de compra
     async createTicket(userId) {
-        // Verificar stock
-        const { productsInStock, productsOutOfStock, cartId } = await this.cartService.verifyStock(userId);
+        const cart = await this.cartDAO.getOrCreateCartByUser(userId);
+        if (!cart || cart.products.length === 0) throw new Error("Carrito vacío");
 
-        if (productsInStock.length === 0) {
-            throw new Error('No hay productos disponibles en stock para la compra.');
+        const productsOutOfStock = [];
+        const productsToBuy = [];
+
+        // Verificar stock y separar productos disponibles
+        for (const item of cart.products) {
+            const product = await this.productDAO.getById(item.product);
+            if (!product) continue;
+
+            if (product.stock < item.quantity) {
+                productsOutOfStock.push(product);
+            } else {
+                product.stock -= item.quantity;
+                await product.save();
+                productsToBuy.push(item);
+            }
+        }
+
+        if (productsToBuy.length === 0) {
+            throw new Error("No hay productos disponibles para comprar");
         }
 
         // Calcular total
-        let total = 0;
-        for (const item of productsInStock) {
-            total += item.product.price * item.quantity;
-        }
+        const totalAmount = productsToBuy.reduce(
+            (acc, item) => acc + item.quantity * (item.product?.price || 0),
+            0
+        );
 
-        // Reducir stock de productos comprados
-        await this.cartService.reduceStock(productsInStock);
-
-        //  Crear ticket
-        const ticket = await Ticket.create({
+        // Crear ticket usando DAO
+        const ticket = await this.ticketDAO.create({
             user: userId,
-            products: productsInStock.map(item => ({
+            products: productsToBuy.map(item => ({
                 product: item.product._id,
                 quantity: item.quantity
             })),
-            total
+            total: totalAmount
         });
 
-        //  Vaciar carrito
-        await this.cartService.clearCart(userId);
+        // Vaciar carrito de los productos comprados
+        cart.products = cart.products.filter(item =>
+            productsOutOfStock.some(p => p._id.toString() === item.product._id.toString())
+        );
+        await cart.save();
 
-        //  Retornar ticket y productos no comprados (por falta de stock)
         return { ticket, productsOutOfStock };
     }
 }

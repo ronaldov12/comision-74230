@@ -1,44 +1,23 @@
-// sessions.routes.js
-import { Router } from 'express';
-import passport from 'passport';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import bcrypt from 'bcrypt';
-import UserDTO from '../dtos/UserDTO.js'; // DTO para filtrar datos sensibles
+// routers/sessions.router.js
+import { Router } from "express";
+import passport from "passport";
+import SessionsController from "../controllers/SessionsController.js";
+
 
 const router = Router();
+const controller = new SessionsController();
 
-// Endpoint para obtener datos del usuario actual
-router.get('/current', passport.authenticate('jwt', { session: false }), (req, res) => {
-    const userDTO = new UserDTO(req.user);
-    res.json({ user: userDTO });
-});
+// POST /api/sessions/register
+router.post("/register", (req, res) => controller.register(req, res));
 
-//  Login de usuario
-router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+// POST /api/sessions/login
+router.post("/login", (req, res) => controller.login(req, res));
 
-    try {
-        const user = await User.findOne({ email });
-        if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-
-        const validPassword = bcrypt.compareSync(password, user.password);
-        if (!validPassword) return res.status(401).json({ message: 'Contraseña incorrecta' });
-
-        // Crear token JWT válido por 1 hora
-        const token = jwt.sign(
-            { id: user._id, email: user.email, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' }
-        );
-
-        res.json({
-            message: 'Login exitoso',
-            token
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Error al iniciar sesión', error });
-    }
-});
+// GET /api/sessions/current
+router.get(
+    "/current",
+    passport.authenticate("jwt", { session: false }),
+    (req, res) => controller.current(req, res)
+);
 
 export default router;

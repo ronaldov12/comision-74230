@@ -11,11 +11,7 @@ const userSchema = new mongoose.Schema({
         ref: 'Cart',
         default: null
     },
-    role: { type: String, default: 'user' },
-
-    // recuperacion de contraseña
-    resetToken: { type: String, default: null },
-    resetTokenExpires: { type: Date, default: null }
+    role: { type: String, default: 'user' }
 }, {
     timestamps: true
 });

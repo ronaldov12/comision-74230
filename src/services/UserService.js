@@ -1,66 +1,58 @@
-import User from "../models/User.js";
-import crypto from "crypto";
-import nodemailer from "nodemailer";
+import UserDAO from "../dao/user.dao.js";
 import bcrypt from "bcrypt";
 
 export default class UserService {
     constructor() {
-        // Configuracion del transportador de email
-        this.transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-        });
+        this.userDAO = new UserDAO();
     }
 
-    // rnviar email de recuperación con token de 1 hora
-    async sendResetPasswordEmail(email) {
-        const user = await User.findOne({ email });
+    async getAllUsers() {
+        return this.userDAO.getAll();
+    }
+
+    async getUserById(id, requester) {
+        const user = await this.userDAO.getById(id);
         if (!user) throw new Error("Usuario no encontrado");
 
-        const token = crypto.randomBytes(20).toString("hex");
-        const expiration = Date.now() + 3600000; 
+        // Validación de acceso: admin o propio usuario
+        if (requester.role !== "admin" && requester._id.toString() !== id) {
+            throw new Error("Acceso no autorizado");
+        }
 
-        // Guardar token temporalmente en usuario
-        user.resetToken = token;
-        user.resetTokenExpires = expiration;
-        await user.save();
-
-        const resetUrl = `http://localhost:8080/api/users/reset-password/${token}`;
-
-        await this.transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: user.email,
-            subject: "Recuperación de contraseña",
-            html: `<p>Para restablecer tu contraseña, haz click <a href="${resetUrl}">aquí</a>. Este enlace expira en 1 hora.</p>`
-        });
-
-        return { message: "Email de recuperación enviado" };
+        return user;
     }
 
-    // restablecer contraseña usando token
-    async resetPassword(token, newPassword) {
-        const user = await User.findOne({
-            resetToken: token,
-            resetTokenExpires: { $gt: Date.now() } // verifica que no haya expirado
-        });
+    async createUser(data) {
+        const exist = await this.userDAO.findByEmail(data.email);
+        if (exist) throw new Error("El usuario ya existe");
 
-        if (!user) throw new Error("Token inválido o expirado");
+        data.password = bcrypt.hashSync(data.password, 10);
+        data.role = data.role || "user";
+        return this.userDAO.create(data);
+    }
 
-        const isSamePassword = await bcrypt.compare(newPassword, user.password);
-        if (isSamePassword) throw new Error("La nueva contraseña no puede ser igual a la anterior");
+    async updateUser(id, updates, requester) {
+        // Validación de acceso: admin o propio usuario
+        if (requester.role !== "admin" && requester._id.toString() !== id) {
+            throw new Error("Acceso no autorizado");
+        }
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        user.password = hashedPassword;
+        if (updates.password) {
+            updates.password = bcrypt.hashSync(updates.password, 10);
+        }
 
-        // limpiar token y expiracion
-        user.resetToken = null;
-        user.resetTokenExpires = null;
+        const updated = await this.userDAO.update(id, updates);
+        if (!updated) throw new Error("Usuario no encontrado");
+        return updated;
+    }
 
-        await user.save();
+    async deleteUser(id) {
+        const deleted = await this.userDAO.delete(id);
+        if (!deleted) throw new Error("Usuario no encontrado");
+        return deleted;
+    }
 
-        return { message: "Contraseña restablecida correctamente" };
+    async findByEmail(email) {
+        return this.userDAO.findByEmail(email);
     }
 }
